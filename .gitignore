@@ -1,0 +1,7 @@
+**/.terraform/
+**/terraform.tfvars
+.venv/
+__pycache__/
+*.pyc
+output/
+data/creditcard.csv
