@@ -1,0 +1,6 @@
+project_id            = "cloud-fraud-detection"
+region                = "europe-west2"
+dataset_bucket_name   = null
+dataset_object_name   = "creditcard.csv"
+artifact_repo_id      = "fraud-detection-images"
+vm_service_account_id = "fraud-vm-sa"

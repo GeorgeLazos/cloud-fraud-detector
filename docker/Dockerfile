@@ -1,5 +1,5 @@
 # Start small python image
-FROM python:3.12-slim 
+FROM python:3.12-slim
 
 # Set the working directory in the container (create app directory)
 WORKDIR /app
@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy the application code to the container and create necessary directories
 COPY scripts ./scripts
 RUN mkdir -p data output
+
+# BASE IMAGE'S DEFAULT CMD STAYS ON TRAINING. THE SCORING IMAGE OVERRIDES CMD VIA Dockerfile.scoring
+# (DOC 2: IMAGE LAYERING - DERIVED IMAGES PIN A DIFFERENT ENTRYPOINT/CMD WITHOUT REBUILDING DEPENDENCIES).
 
 #Set the default command to run the application
 CMD ["python", "scripts/fraud_detection_pyspark.py", "--data-path", "data/creditcard.csv", "--output-dir", "output", "--max-iter", "10"]

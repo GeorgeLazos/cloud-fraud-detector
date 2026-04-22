@@ -1,2 +1,6 @@
 jupyter
 pyspark
+
+#Dependencies for the scoring image
+google-cloud-pubsub==2.21.5
+google-cloud-storage==2.18.0

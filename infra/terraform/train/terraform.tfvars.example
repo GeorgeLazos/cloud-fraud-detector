@@ -1,0 +1,6 @@
+zone              = "europe-west2-a"
+instance_name     = "fraud-train-vm"
+machine_type      = "e2-medium"
+vpc_name          = "fraud-train-vpc"
+subnet_name       = "fraud-train-subnet"
+subnet_cidr_range = "10.10.0.0/24"

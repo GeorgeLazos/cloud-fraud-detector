@@ -56,6 +56,13 @@ def build_arg_parser():
         default=0.1,
         help="Classification threshold applied by LogisticRegression for the fraud class.",
     )
+    
+    # Add an argument for the model output directory
+    parser.add_argument(
+        "--model-output-dir",
+        default=None,
+        help="Optional directory where the trained PipelineModel will be saved.",
+    )
     return parser
 
 
@@ -149,6 +156,13 @@ def main():
         # Fit the model on the training data and make predictions on the test data
         model = pipeline.fit(train_df)
         predictions = model.transform(test_df)
+
+        # Save the trained pipeline model to specified output directory
+        if args.model_output_dir:
+            model_output_path = Path(args.model_output_dir)
+            model_output_path.mkdir(parents=True, exist_ok=True)
+            model.write().overwrite().save(str(model_output_path))
+            print(f"Trained PipelineModel saved to: {model_output_path}")
 
         #Initialize and use Binary Classification Evaluator to evaluate the model's performance using Area Under ROC metric
         evaluator = BinaryClassificationEvaluator(

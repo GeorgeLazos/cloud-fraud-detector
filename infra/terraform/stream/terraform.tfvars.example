@@ -1,0 +1,8 @@
+zone                   = "europe-west2-a"
+instance_name          = "fraud-stream-vm"
+machine_type           = "e2-medium"
+vpc_name               = "fraud-stream-vpc"
+subnet_name            = "fraud-stream-subnet"
+subnet_cidr_range      = "10.20.0.0/24"
+pubsub_topic_id        = "fraud-transactions"
+pubsub_subscription_id = "fraud-transactions-sub"
