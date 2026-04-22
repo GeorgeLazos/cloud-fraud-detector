@@ -50,6 +50,12 @@ def build_arg_parser():
         default=1.0,
         help="Optional fraction of rows to use for a faster prototype run.",
     )
+    parser.add_argument(
+        "--decision-threshold",
+        type=float,
+        default=0.1,
+        help="Classification threshold applied by LogisticRegression for the fraud class.",
+    )
     return parser
 
 
@@ -134,6 +140,7 @@ def main():
             featuresCol="features",
             labelCol="label",
             maxIter=args.max_iter,
+            threshold=args.decision_threshold,
         )
 
         # Create Pipeline to connect layers
@@ -182,6 +189,7 @@ def main():
             "test_rows": test_df.count(),
             "sample_fraction": args.sample_fraction,
             "max_iter": args.max_iter,
+            "decision_threshold": args.decision_threshold,
             "area_under_roc": round(auc, 4),
             "sql_summary": [
                 {

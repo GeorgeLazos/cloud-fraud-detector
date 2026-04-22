@@ -7,7 +7,7 @@ export DEBIAN_FRONTEND=noninteractive
 #Variables
 WORKDIR="/opt/vm-ml-tutorial"             # Main folder of the VM
 LOG_PATH="$WORKDIR/startup.log"           # Path to the startup log
-IMAGE_NAME="fraud-pyspark:v1.0"           # Name of the built docker image
+IMAGE_NAME="fraud-pyspark:v2.0"           # Name of the built docker image
 CONTAINER_NAME="fraud-pyspark"            # Name of running container instance
 DATA_PATH="$WORKDIR/data/creditcard.csv"  # Path where the downloaded dataset will be stored
 DATA_BUCKET="${dataset_bucket_name}"      # GCS bucket that stores the dataset
