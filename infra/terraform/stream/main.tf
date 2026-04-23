@@ -1,10 +1,6 @@
-# NEW STACK (STREAM): TUTORIAL 2 INFRASTRUCTURE.
-# DOC 1: PRIVATE SUBNET + PGA + NAT + IAP (SAME DEFENCE-IN-DEPTH PATTERN AS TRAIN STACK).
-# DOC 1: PUB/SUB TOPIC + SUBSCRIPTION FOR THE TRANSACTION STREAM.
-# DOC 2: VM PULLS THE PRE-BUILT SCORING IMAGE FROM ARTIFACT REGISTRY (NO REBUILD).
-# DOC 4: PIPELINEMODEL LOADED INSIDE THE CONTAINER PROCESSES STREAMED MESSAGES.
-# DOC 3: READS BUCKET / REGISTRY / SA FROM THE DATA STACK VIA REMOTE STATE.
+# STREAM STACK - INFRASTRUCTURE FOR THE STREAMING COMPONENT OF THE TUTORIAL
 
+# Initialize TF and google provider.
 terraform {
   required_version = ">= 1.5.0"
 
@@ -16,7 +12,7 @@ terraform {
   }
 }
 
-# DOC 3: REUSE THE DATA STACK'S OUTPUTS - SAME PATTERN AS THE TRAIN STACK
+# Create a data source to read outputs from the data stack's terraform state file.
 data "terraform_remote_state" "data" {
   backend = "local"
   config = {
@@ -24,6 +20,7 @@ data "terraform_remote_state" "data" {
   }
 }
 
+# Create shorter local variables for easier access to the data stack outputs.
 locals {
   project_id                = data.terraform_remote_state.data.outputs.project_id
   region                    = data.terraform_remote_state.data.outputs.region
@@ -31,26 +28,29 @@ locals {
   stream_subset_object_name = data.terraform_remote_state.data.outputs.stream_subset_object_name
   artifact_repo_url         = data.terraform_remote_state.data.outputs.artifact_repo_url
   service_account_email     = data.terraform_remote_state.data.outputs.service_account_email
-  scoring_image_url         = "${local.artifact_repo_url}/fraud-scoring:v3"
+  scoring_image_url         = "${local.artifact_repo_url}/fraud-scoring:v4"
 }
 
+# Configure provider
 provider "google" {
   project = local.project_id
   region  = local.region
   zone    = var.zone
 }
 
+# Configure latest Ubuntu 22.04 LTS image from the public image family.
 data "google_compute_image" "ubuntu" {
   family  = "ubuntu-2204-lts"
   project = "ubuntu-os-cloud"
 }
 
-# DOC 1: SECOND CUSTOM VPC - ISOLATED FROM THE TRAIN STACK'S NETWORK
+# Create custom VPC
 resource "google_compute_network" "stream_vpc" {
   name                    = var.vpc_name
   auto_create_subnetworks = false
 }
 
+# Create private subnet for stream VM
 resource "google_compute_subnetwork" "stream_subnet" {
   name                     = var.subnet_name
   ip_cidr_range            = var.subnet_cidr_range
@@ -59,12 +59,14 @@ resource "google_compute_subnetwork" "stream_subnet" {
   private_ip_google_access = true
 }
 
+# Create Cloud Router
 resource "google_compute_router" "stream_router" {
   name    = "${var.vpc_name}-router"
   region  = local.region
   network = google_compute_network.stream_vpc.id
 }
 
+# Create Cloud NAT for outbound internet access from the stream VM without a public IP.
 resource "google_compute_router_nat" "stream_nat" {
   name                               = "${var.vpc_name}-nat"
   router                             = google_compute_router.stream_router.name
@@ -73,6 +75,7 @@ resource "google_compute_router_nat" "stream_nat" {
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 }
 
+# Allow SSH access from IAP only (no public access)
 resource "google_compute_firewall" "allow_iap_ssh" {
   name        = "${var.instance_name}-allow-iap-ssh"
   network     = google_compute_network.stream_vpc.name
@@ -87,7 +90,7 @@ resource "google_compute_firewall" "allow_iap_ssh" {
   target_tags   = ["ssh-iap"]
 }
 
-# DOC 1: PUB/SUB TOPIC - THE TRANSACTION STREAM
+# Create a pub/sub topic 
 resource "google_pubsub_topic" "transactions" {
   name = var.pubsub_topic_id
 
@@ -97,17 +100,15 @@ resource "google_pubsub_topic" "transactions" {
   }
 }
 
-# DOC 1: PULL SUBSCRIPTION - THE STREAM CONSUMER PULLS MESSAGES FROM HERE
+# Create pub/sub subscription for the topic
 resource "google_pubsub_subscription" "transactions_sub" {
   name  = var.pubsub_subscription_id
   topic = google_pubsub_topic.transactions.name
 
-  # ACK DEADLINE GIVES THE CONSUMER 60s TO PROCESS A MESSAGE BEFORE IT IS REDELIVERED
   ack_deadline_seconds = 60
-
-  # MESSAGE_RETENTION_DURATION DEFAULTS TO 7 DAYS - LIFECYCLE DELETION OF THIS SUB AT destroy IS THE CLEANUP
+ 
   expiration_policy {
-    ttl = "" # NEVER EXPIRE WHILE THE STACK IS UP - GETS DESTROYED EXPLICITLY BY terraform destroy
+    ttl = "" 
   }
 
   labels = {
@@ -116,7 +117,7 @@ resource "google_pubsub_subscription" "transactions_sub" {
   }
 }
 
-# DOC 1 + DOC 2: STREAM VM - PRIVATE, NO PUBLIC IP, RUNS DOCKER + PUBLISHER
+# Create stream VM with access to the private subnet and the service account for pulling the scoring image and publishing to Pub/Sub.
 resource "google_compute_instance" "stream_vm" {
   name         = var.instance_name
   machine_type = var.machine_type
@@ -131,15 +132,18 @@ resource "google_compute_instance" "stream_vm" {
     }
   }
 
+  # Connect the VM to the private subnet (no public IP)
   network_interface {
     subnetwork = google_compute_subnetwork.stream_subnet.id
   }
 
+  # Grant the VM's service account permissions to pull the scoring image and publish to Pub/Sub.
   service_account {
     email  = local.service_account_email
     scopes = ["https://www.googleapis.com/auth/cloud-platform"]
   }
 
+  # Startup script
   metadata_startup_script = templatefile("${path.module}/startup.sh", {
     publish_script_py         = file("${path.module}/../../../scripts/publish_transactions.py")
     dataset_bucket_name       = local.dataset_bucket_name
@@ -156,6 +160,7 @@ resource "google_compute_instance" "stream_vm" {
     course   = "cloud-hpc"
   }
 
+  # Ensure the VM is created after the Pub/Sub subscription to avoid startup script errors.
   depends_on = [
     google_pubsub_subscription.transactions_sub,
   ]

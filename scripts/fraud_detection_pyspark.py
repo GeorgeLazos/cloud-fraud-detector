@@ -5,8 +5,10 @@ from pathlib import Path
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
-from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import when, col
+import math 
 
 SEED = 2003
 
@@ -50,10 +52,12 @@ def build_arg_parser():
         default=1.0,
         help="Optional fraction of rows to use for a faster prototype run.",
     )
+    
+    # Add an argument for the classification threshold for the fraud class in Logistic Regression
     parser.add_argument(
         "--decision-threshold",
         type=float,
-        default=0.1,
+        default=0.7, 
         help="Classification threshold applied by LogisticRegression for the fraud class.",
     )
     
@@ -113,6 +117,14 @@ def main():
         clean_df.cache()
         rows_after = clean_df.count()
 
+        # class weighting - dataset is ~0.17% fraud, so we up-weight positives so LR's loss
+        fraud_count = clean_df.filter(col("label") == 1).count()
+        weight_for_fraud = math.sqrt((rows_after - fraud_count) / fraud_count) 
+        clean_df = clean_df.withColumn(
+            "weight",
+            when(col("label") == 1, weight_for_fraud).otherwise(1.0),
+        )                                                                                 
+
         # Create temporary transactions table for SQL view
         clean_df.createOrReplaceTempView("transactions")
 
@@ -131,7 +143,7 @@ def main():
         )
 
         # Select feature columns for the model
-        feature_cols = [column for column in clean_df.columns if column != "label"]
+        feature_cols = [column for column in clean_df.columns if column not in ("label", "weight")]
 
         # Split the cleaned DataFrame into training and test sets using a random split
         train_df, test_df = clean_df.randomSplit([TRAIN_SPLIT, TEST_SPLIT], seed=SEED)
@@ -139,19 +151,28 @@ def main():
         # Assembler to combine feature columns into a single vector column for the model
         assembler = VectorAssembler(
             inputCols=feature_cols,
-            outputCol="features",
+            outputCol="raw_features", 
         )
+
+        # Scaling so LR's gradient descent isn't dominated by whichever feature has the largest scale.
+        scaler = StandardScaler(               
+            inputCol="raw_features",            
+            outputCol="features",              
+            withMean=False,                     
+            withStd=True,                       
+        )                                       
 
         # Initialize a Logistic Regression model for binary classification
         lr = LogisticRegression(
             featuresCol="features",
             labelCol="label",
+            weightCol="weight",
             maxIter=args.max_iter,
             threshold=args.decision_threshold,
         )
 
         # Create Pipeline to connect layers
-        pipeline = Pipeline(stages=[assembler, lr])
+        pipeline = Pipeline(stages=[assembler, scaler, lr])
 
         # Fit the model on the training data and make predictions on the test data
         model = pipeline.fit(train_df)
@@ -171,6 +192,14 @@ def main():
             metricName="areaUnderROC",
         )
         auc = evaluator.evaluate(predictions)
+
+        # AUC-PR is the honest metric for imbalanced data - ROC looks great even on bad models when positives are 0.17%.
+        evaluator_pr = BinaryClassificationEvaluator(
+            labelCol="label",
+            rawPredictionCol="rawPrediction",
+            metricName="areaUnderPR",
+        )
+        auc_pr = evaluator_pr.evaluate(predictions)
 
         # Build confusion matrix
         confusion_matrix = (
@@ -205,6 +234,7 @@ def main():
             "max_iter": args.max_iter,
             "decision_threshold": args.decision_threshold,
             "area_under_roc": round(auc, 4),
+            "area_under_pr": round(auc_pr, 4),
             "sql_summary": [
                 {
                     "label": int(row["label"]),
@@ -235,6 +265,7 @@ def main():
         print(f"Training rows: {summary['train_rows']}")
         print(f"Test rows: {summary['test_rows']}")
         print(f"Area Under ROC: {summary['area_under_roc']:.4f}")
+        print(f"Area Under PR:  {summary['area_under_pr']:.4f}")  
         print(f"Summary written to: {summary_path}")
         print(f"Sample predictions written to: {sample_predictions_path}")
     

@@ -4,7 +4,7 @@ Two-tutorial PySpark fraud-detection portfolio deployed on Google Cloud with Ter
 
 ## Architecture in one paragraph
 
-Three Terraform stacks share one bucket and one private container registry. The **data stack** creates the bucket (with the dataset uploaded) and the Artifact Registry repository — these are the only resources that survive between tutorials. The **train stack** spins up a private VM with Cloud NAT and IAP access (Doc 1 defence-in-depth), builds a Docker base image, runs PySpark training inside it (Doc 4), then layers the trained `PipelineModel` into a derived `fraud-scoring:v1` image and pushes it to the registry (Doc 2). The **stream stack** spins up a separate private VM, pulls `fraud-scoring:v1`, runs a Python publisher that replays test transactions to a Pub/Sub topic, and runs a Python pull-loop consumer that scores each batch through the saved Spark model and writes a fraud report.
+Three Terraform stacks share one bucket and one private container registry. The **data stack** creates the bucket (with the dataset uploaded) and the Artifact Registry repository — these are the only resources that survive between tutorials. The **train stack** spins up a private VM with Cloud NAT and IAP access (Doc 1 defence-in-depth), builds a Docker base image, runs PySpark training inside it (Doc 4), then layers the trained `PipelineModel` into a derived `fraud-scoring:v4` image and pushes it to the registry (Doc 2). The **stream stack** spins up a separate private VM, pulls `fraud-scoring:v4`, runs a Python publisher that replays test transactions to a Pub/Sub topic, and runs a Python pull-loop consumer that scores each batch through the saved Spark model and writes a fraud report.
 
 ## What lives where
 

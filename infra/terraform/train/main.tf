@@ -29,7 +29,7 @@ locals {
   artifact_repo_url     = data.terraform_remote_state.data.outputs.artifact_repo_url
   service_account_email = data.terraform_remote_state.data.outputs.service_account_email
   base_image_url        = "${local.artifact_repo_url}/fraud-detection:base"
-  scoring_image_url     = "${local.artifact_repo_url}/fraud-scoring:v3"
+  scoring_image_url     = "${local.artifact_repo_url}/fraud-scoring:v4"
 }
 
 # Configure provider
