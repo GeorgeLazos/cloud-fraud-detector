@@ -66,6 +66,23 @@ gcloud compute ssh fraud-stream-vm --zone europe-west2-a --tunnel-through-iap \
 | Three independent Terraform stacks reading via remote state | Doc 3 (modules + state separation) |
 | PySpark training (`PipelineModel.save`) and inference (`PipelineModel.load`) | Doc 4 (PySpark) |
 
+## Vulnerability scanning
+
+Container Analysis (`containerscanning.googleapis.com`) auto-scans every image pushed to Artifact Registry. The scan on `fraud-scoring:v5` returned 2 CRITICAL, 32 HIGH, 35 MEDIUM, 28 LOW and 26 MINIMAL findings — all inherited from the `python:3.12-slim` Debian trixie base layer (`glibc`, `tar`, `nss`, `sqlite3`, `shadow`, `systemd`), none in application code or Python dependencies.
+
+Two flags on every finding make them non-actionable today:
+- `effectiveSeverity: MINIMAL` — Google's contextual re-score. Base CVSS is high, but the vulnerable code paths are not reachable in this image's runtime context.
+- `fixedVersion.kind: MAXIMUM` — no upstream fix exists in Debian, so `apt-get upgrade` would change nothing.
+
+Structural mitigations noted as future work: switch to a distroless or Chainguard base, pin the base by digest (`FROM python:3.12-slim@sha256:...`) so re-scans run against a known image rather than a moving tag, and drop `openjdk-21-jre-headless` from the scoring image (only training needs Spark).
+
+```bash
+# Reproduce the scan
+gcloud artifacts docker images list \
+  europe-west2-docker.pkg.dev/<project_id>/fraud-detection-images/fraud-scoring \
+  --show-occurrences --occurrence-filter='kind="VULNERABILITY"'
+```
+
 ## Cost
 
 A full apply→destroy run costs about 10p (two e2-medium VMs running ~5 minutes each, Pub/Sub pennies, bucket and registry essentially free at this size). The bucket has a 7-day object lifecycle rule as a backstop in case `terraform destroy` is forgotten.

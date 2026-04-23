@@ -28,7 +28,7 @@ locals {
   stream_subset_object_name = data.terraform_remote_state.data.outputs.stream_subset_object_name
   artifact_repo_url         = data.terraform_remote_state.data.outputs.artifact_repo_url
   service_account_email     = data.terraform_remote_state.data.outputs.service_account_email
-  scoring_image_url         = "${local.artifact_repo_url}/fraud-scoring:v4"
+  scoring_image_url         = "${local.artifact_repo_url}/fraud-scoring:v5"
 }
 
 # Configure provider

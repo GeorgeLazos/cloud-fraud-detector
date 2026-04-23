@@ -1,5 +1,7 @@
 jupyter
-pyspark
+# Pinned: pyspark 4.x dropped numpy as a hard dependency, so unpinned pulls broke training.
+pyspark==3.5.3
+numpy
 
 #Dependencies for the scoring image
 google-cloud-pubsub==2.21.5
