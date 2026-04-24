@@ -1,10 +1,12 @@
 # Cloud Fraud Detection — Train and Deploy on GCP
 
-Two-tutorial PySpark fraud-detection portfolio deployed on Google Cloud with Terraform, Docker, and Pub/Sub. 
+Three-notebook PySpark fraud-detection portfolio deployed on Google Cloud with Terraform, Docker, and Pub/Sub.
 
-Tutorial 1 trains a model on the cloud and pushes a versioned scoring image to Artifact Registry.
+[tutorial_1.ipynb](tutorial_1.ipynb) introduces the problem, walks through the shared **data stack** (bucket, registry, service account), and sets up prerequisites (`gcloud`, Terraform, tfvars).
 
-Tutorial 2 spins up a private VM that pulls that image and scores a Pub/Sub stream of transactions, producing a fraud report. Final teardown leaves zero cloud state.
+[tutorial_2.ipynb](tutorial_2.ipynb) applies the **train stack** — a private VM that builds the base image, runs PySpark training, layers the trained `PipelineModel` into `fraud-scoring:v5`, and pushes it to Artifact Registry. Includes the vulnerability scan and output-inspection commands.
+
+[tutorial_3.ipynb](tutorial_3.ipynb) applies the **stream stack** — a private VM that pulls `fraud-scoring:v5`, publishes CSV rows to a Pub/Sub topic, runs a pull-loop consumer that scores each batch through the saved Spark model, writes a fraud report to GCS, and tears everything down to zero cloud state.
 
 ## Architecture in one paragraph
 
@@ -31,9 +33,14 @@ Tutorial1/
 │   └── destroy_everything.sh       single-command teardown of all 3 stacks
 ├── infra/terraform/
 │   ├── data/                       bucket + registry + service account + IAM
+│   │   └── terraform.tfvars.example  copy to terraform.tfvars and fill in project_id
 │   ├── train/                      VPC + private subnet + NAT + IAP + train VM
+│   │   └── terraform.tfvars.example  copy to terraform.tfvars and fill in project_id
 │   └── stream/                     VPC + private subnet + NAT + IAP + stream VM + Pub/Sub
-├── tutorial.ipynb                  notebook walkthrough (legacy, will be split)
+│       └── terraform.tfvars.example  copy to terraform.tfvars and fill in project_id
+├── tutorial_1.ipynb                walkthrough part 1: problem + data stack + prereqs
+├── tutorial_2.ipynb                walkthrough part 2: train stack + scoring image
+├── tutorial_3.ipynb                walkthrough part 3: stream stack + teardown
 └── requirements.txt                Python deps (PySpark + google-cloud-* clients)
 ```
 
@@ -64,7 +71,7 @@ gcloud artifacts docker images list \
 # Pretty-print training metrics from GCS (AUC-ROC, AUC-PR, confusion matrix)
 gcloud storage cat gs://<bucket>/summaries/summary.json | jq
 
-# See the vulnerability scan Container Analysis ran on the pushed image
+# List vulnerability findings from Container Analysis for the scoring image
 gcloud artifacts docker images list \
   europe-west2-docker.pkg.dev/<project_id>/fraud-detection-images/fraud-scoring \
   --show-occurrences --occurrence-filter='kind="VULNERABILITY"'
@@ -100,10 +107,10 @@ gcloud pubsub topics list --filter="labels.course=cloud-hpc"
 
 ## Vulnerability scanning
 
-Container Analysis (`containerscanning.googleapis.com`) auto-scans every image pushed to Artifact Registry. The scan on `fraud-scoring:v5` returned 2 CRITICAL, 32 HIGH, 35 MEDIUM, 28 LOW and 26 MINIMAL findings — all inherited from the `python:3.12-slim`
+Container Analysis (`containerscanning.googleapis.com`) can scan images in Artifact Registry on demand. After `fraud-scoring:v5` was pushed, the command below was run once and returned 2 CRITICAL, 32 HIGH, 35 MEDIUM, 28 LOW and 26 MINIMAL findings — all inherited from the `python:3.12-slim` base.
 
 ```bash
-# Reproduce the scan
+# List the findings
 gcloud artifacts docker images list \
   europe-west2-docker.pkg.dev/<project_id>/fraud-detection-images/fraud-scoring \
   --show-occurrences --occurrence-filter='kind="VULNERABILITY"'
