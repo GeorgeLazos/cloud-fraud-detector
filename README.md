@@ -18,6 +18,15 @@ The **train stack** spins up a private VM with Cloud NAT and IAP access, builds 
 
 The **stream stack** spins up a separate private VM, pulls `fraud-scoring:v5`, runs a Python publisher that replays test transactions to a Pub/Sub topic, and runs a Python pull-loop consumer that scores each batch through the saved Spark model and writes a fraud report.
 
+## Results
+
+| Metric | Value |
+|---|---|
+| AUC-ROC | 0.96 |
+| AUC-PR | 0.71 |
+
+Logistic regression on a heavily imbalanced dataset, where AUC-PR is the more telling of the two scores.
+
 ## What lives where
 
 ```
